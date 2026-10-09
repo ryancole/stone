@@ -120,14 +120,17 @@ try {
     $attributed = foreach ($o in $observations) {
         # ConvertFrom-Json turns ISO strings into DateTime already; don't round-trip via string.
         $ts = if ($o.ts -is [datetime]) { [DateTimeOffset] $o.ts.ToUniversalTime() } else { [DateTimeOffset]::Parse($o.ts) }
-        $hit = $tests | Where-Object { $_.Start -le $ts -and $ts -le $_.End } | Select-Object -First 1
-        $o['testByTrx'] = ${hit}?.Name
+        # The hook marks fixture code it can see (direct writes during AssemblyInitialize etc.);
+        # those fall inside the first test's TRX window but don't belong to it.
+        $o['phase'] = if ($o.test -eq '(setup)') { 'setup' } else { 'test' }
+        $hit = if ($o.phase -eq 'test') { $tests | Where-Object { $_.Start -le $ts -and $ts -le $_.End } | Select-Object -First 1 }
+        $o['testByTrx'] = if ($o.phase -eq 'setup') { '(setup)' } else { ${hit}?.Name }
         $o
     }
     $attributedPath = Join-Path $OutDir 'observations-attributed.jsonl'
     $attributed | ForEach-Object { $_ | ConvertTo-Json -Depth 64 -Compress } | Set-Content $attributedPath
 
-    # Stack attribution names "Class.Method"; TRX names may be "Method" or fully qualified.
+    # In-process attribution names "Class.Method"; TRX names may be "Method" or fully qualified.
     $agree = @($attributed | Where-Object { $_.test -and $_.testByTrx -and ($_.test -split '\.')[-1] -eq ($_.testByTrx -split '\.')[-1] }).Count
     $disagree = @($attributed | Where-Object { $_.test -and $_.testByTrx -and ($_.test -split '\.')[-1] -ne ($_.testByTrx -split '\.')[-1] }).Count
 
@@ -144,11 +147,12 @@ try {
         observations        = $observations.Count
         byKind              = $attributed | Group-Object { $_.kind } | ForEach-Object { @{ $_.Name = $_.Count } }
         attribution         = [ordered] @{
-            stack                = @($attributed | Where-Object { $_.test }).Count
+            inProcess            = @($attributed | Where-Object { $_.test }).Count
             trx                  = @($attributed | Where-Object { $_.testByTrx }).Count
             neither              = @($attributed | Where-Object { -not $_.test -and -not $_.testByTrx }).Count
-            stackAndTrxAgree     = $agree
-            stackAndTrxDisagree  = $disagree
+            setupPhase           = @($attributed | Where-Object { $_.phase -eq 'setup' }).Count
+            inProcessAndTrxAgree     = $agree
+            inProcessAndTrxDisagree  = $disagree
         }
         perTest             = $tests | ForEach-Object {
             $t = $_
@@ -170,7 +174,7 @@ try {
     Step 'Done'
     Write-Host "  tests in TRX:     $($tests.Count)  (dotnet test exit $testExit)"
     Write-Host "  observations:     $($observations.Count)"
-    Write-Host "  attributed (TRX): $($summary.attribution.trx)   (stack): $($summary.attribution.stack)   neither: $($summary.attribution.neither)"
+    Write-Host "  attributed (TRX): $($summary.attribution.trx)   (in-process): $($summary.attribution.inProcess)   neither: $($summary.attribution.neither)"
     Write-Host "  hook errors:      $(@($summary.hookErrors).Count)"
     Write-Host "  output:           $OutDir"
     Write-Host "  bundle:           $zip"

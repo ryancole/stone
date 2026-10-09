@@ -72,7 +72,7 @@ sealed class HttpCapture(ObservationWriter writer) : IObserver<KeyValuePair<stri
             Tee = tee,
             StartTicks = Stopwatch.GetTimestamp(),
             StartedAt = DateTimeOffset.UtcNow,
-            Attribution = TestAttribution.FromStack(),
+            Attribution = TestAttribution.Find(),
         });
         // Hosting has started the request Activity before raising .Start.
         if (Activity.Current is { OperationName: ActivityName } activity)

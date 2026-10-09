@@ -26,6 +26,10 @@ public static class SampleApiFactory
 
         await using var db = await CreateDbContextAsync();
         await db.Database.EnsureCreatedAsync();
+
+        // Fixture-time write, like WhatInBox seeding its test user: must be labeled setup, not the first test.
+        db.Workflows.Add(new Workflow { Name = "fixture-seed", CreatedUtc = DateTime.UtcNow, ExternalId = Guid.NewGuid(), Priority = WorkflowPriority.High, Labels = ["seed", "vip"] });
+        await db.SaveChangesAsync();
     }
 
     [AssemblyCleanup]

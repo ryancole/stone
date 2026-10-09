@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 
 namespace BehaveDiff.Capture;
 
@@ -22,7 +23,7 @@ sealed class EfCapture(ObservationWriter writer, HttpCapture http) : IObserver<K
 
     public static bool IsEnabled(string name) => name.StartsWith(Prefix, StringComparison.Ordinal);
 
-    sealed record PendingWrite(object Entry, string Entity, string State, JsonObject Values, string[] KeyNames);
+    sealed record PendingWrite(object Entry, string Entity, string State, JsonObject Values, JsonObject ProviderValues, string[] KeyNames);
 
     sealed class PendingSave
     {
@@ -67,7 +68,7 @@ sealed class EfCapture(ObservationWriter writer, HttpCapture http) : IObserver<K
             writes.Add(Snapshot(entry, state));
         }
 
-        var (trigger, attribution) = http.CurrentRequest() ?? ("(test code)", TestAttribution.FromStack());
+        var (trigger, attribution) = http.CurrentRequest() ?? ("(test code)", TestAttribution.ForTestCode());
         _pending.AddOrUpdate(context, new PendingSave
         {
             Writes = writes,
@@ -99,6 +100,8 @@ sealed class EfCapture(ObservationWriter writer, HttpCapture http) : IObserver<K
                 ["state"] = write.State,
                 ["keys"] = new JsonArray(write.KeyNames.Select(k => (JsonNode?)k).ToArray()),
                 ["values"] = write.Values,
+                // Only columns whose stored form differs from the CLR value (value converters).
+                ["providerValues"] = write.ProviderValues.Count > 0 ? write.ProviderValues : null,
                 ["outcome"] = outcome == "saved" ? null : outcome,
             };
             writer.Write("db-write", save.Trigger, data, elapsed, save.Attribution, save.StartedAt);
@@ -114,42 +117,82 @@ sealed class EfCapture(ObservationWriter writer, HttpCapture http) : IObserver<K
             .ToArray();
 
         var values = new JsonObject();
+        var providerValues = new JsonObject();
         foreach (var prop in Reflect.Enumerate(Reflect.Get(entry, "Properties")))
         {
-            var name = (string)Reflect.Get(Reflect.Get(prop, "Metadata"), "Name")!;
+            var propMeta = Reflect.Get(prop, "Metadata")!;
+            var name = (string)Reflect.Get(propMeta, "Name")!;
             var isKey = keyNames.Contains(name);
+            var converter = ConverterOf(propMeta);
             switch (state)
             {
                 case "Added":
-                    values[name] = ToJson(Reflect.Get(prop, "CurrentValue"));
+                    Record(name, Reflect.Get(prop, "CurrentValue"));
                     break;
                 case "Deleted":
-                    values[name] = ToJson(Reflect.Get(prop, "OriginalValue"));
+                    Record(name, Reflect.Get(prop, "OriginalValue"));
                     break;
                 case "Modified" when isKey:
-                    values[name] = ToJson(Reflect.Get(prop, "CurrentValue"));
+                    Record(name, Reflect.Get(prop, "CurrentValue"));
                     break;
                 case "Modified" when Reflect.Get(prop, "IsModified") is true:
-                    values[name] = new JsonObject
-                    {
-                        ["original"] = ToJson(Reflect.Get(prop, "OriginalValue")),
-                        ["current"] = ToJson(Reflect.Get(prop, "CurrentValue")),
-                    };
+                    var original = Reflect.Get(prop, "OriginalValue");
+                    var current = Reflect.Get(prop, "CurrentValue");
+                    values[name] = new JsonObject { ["original"] = ToJson(original), ["current"] = ToJson(current) };
+                    if (ProviderDiffers(converter, original, out var origProvider) | ProviderDiffers(converter, current, out var curProvider))
+                        providerValues[name] = new JsonObject { ["original"] = origProvider, ["current"] = curProvider };
                     break;
             }
+
+            void Record(string column, object? value)
+            {
+                values[column] = ToJson(value);
+                if (ProviderDiffers(converter, value, out var provider))
+                    providerValues[column] = provider;
+            }
         }
-        return new PendingWrite(entry, entity, state, values, keyNames);
+        return new PendingWrite(entry, entity, state, values, providerValues, keyNames);
     }
 
-    static JsonNode? ToJson(object? value)
+    /// <summary>The value converter EF applies for this column, explicit or by convention; null when none.</summary>
+    static Func<object?, object?>? ConverterOf(object propertyMetadata)
+    {
+        try
+        {
+            var mapping = Reflect.Call(propertyMetadata, "GetTypeMapping") ?? Reflect.Call(propertyMetadata, "FindTypeMapping");
+            return Reflect.Get(Reflect.Get(mapping, "Converter"), "ConvertToProvider") as Func<object?, object?>;
+        }
+        catch { return null; }
+    }
+
+    /// <summary>
+    /// The value as sent to the database, when a converter changes it in a way that matters.
+    /// Enum-to-number conventions don't count: the CLR value already says the same thing.
+    /// </summary>
+    static bool ProviderDiffers(Func<object?, object?>? converter, object? value, out JsonNode? provider)
+    {
+        provider = null;
+        if (converter is null || value is null) return false;
+        try
+        {
+            provider = ToJson(converter(value), NumericEnums);
+            return !JsonNode.DeepEquals(provider, ToJson(value, NumericEnums));
+        }
+        catch { return false; }
+    }
+
+    static readonly JsonSerializerOptions NamedEnums = new() { Converters = { new JsonStringEnumConverter() } };
+    static readonly JsonSerializerOptions NumericEnums = new();
+
+    /// <summary>JSON for a column value. Enums as names (including inside collections) by default.</summary>
+    static JsonNode? ToJson(object? value, JsonSerializerOptions? options = null)
     {
         switch (value)
         {
             case null: return null;
-            case Enum e: return e.ToString();
             case byte[] b: return Convert.ToBase64String(b);
         }
-        try { return JsonSerializer.SerializeToNode(value, value.GetType()); }
+        try { return JsonSerializer.SerializeToNode(value, value.GetType(), options ?? NamedEnums); }
         catch { return value.ToString(); }
     }
 

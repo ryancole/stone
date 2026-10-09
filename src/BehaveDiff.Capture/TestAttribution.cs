@@ -15,8 +15,49 @@ static class TestAttribution
     public readonly record struct Result(string? Test, string? Source);
 
     static readonly ConcurrentDictionary<MethodBase, string?> Cache = new();
+    static PropertyInfo? _testContextCurrent;
 
-    public static Result FromStack()
+    /// <summary>MSTest 4's TestContext.Current (AsyncLocal), else a stack scan.</summary>
+    public static Result Find()
+    {
+        var fromContext = FromTestContext();
+        return fromContext.Source is not null ? fromContext : FromStack();
+    }
+
+    /// <summary>
+    /// For work done directly by test code (not inside a request). MSTest is present but no test
+    /// is current only while fixture code runs (AssemblyInitialize / ClassInitialize).
+    /// </summary>
+    public static Result ForTestCode()
+    {
+        var found = Find();
+        return found.Test is null && _testContextCurrent is not null ? new("(setup)", "mstest-context") : found;
+    }
+
+    /// <summary>
+    /// TestContext.Current flows with the async context MSTest runs test code on, but not onto
+    /// TestServer's request threads.
+    /// </summary>
+    static Result FromTestContext()
+    {
+        try
+        {
+            _testContextCurrent ??= AppDomain.CurrentDomain.GetAssemblies()
+                .Select(a => a.GetType("Microsoft.VisualStudio.TestTools.UnitTesting.TestContext", throwOnError: false))
+                .FirstOrDefault(t => t is not null)
+                ?.GetProperty("Current", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+            var context = _testContextCurrent?.GetValue(null);
+            if (context is null) return new(null, null);
+            var test = Reflect.Get(context, "TestName") as string;
+            var cls = (Reflect.Get(context, "FullyQualifiedTestClassName") as string)?.Split('.')[^1];
+            return test is null
+                ? new("(setup)", "mstest-context")
+                : new(cls is null ? test : $"{cls}.{test}", "mstest-context");
+        }
+        catch { return new(null, null); }
+    }
+
+    static Result FromStack()
     {
         try
         {
