@@ -51,6 +51,9 @@ services only, so a local server goes in a settings file. Without the CLI, quit 
 - Same with the CLI: `claude mcp add -s user behavediff -- <path>\behavediff.exe mcp --repo <app> --config <yml>`.
 - Check it connected: ask the session which MCP servers are available.
 
+- Or let a script do the edit for one project only (backs up, validates, both path spellings):
+  `pwsh -File etc/register-mcp.ps1 -ProjectPath C:path	opp -Config C:pathoutside	heepobehavediff.yml`
+
 Without `behavediff init` (which gitignores `.behavediff/`), run artifacts and accepted differences are stored under the temp directory instead of the repo, so the working tree stays untouched.
 
 ## CLAUDE.md snippet
