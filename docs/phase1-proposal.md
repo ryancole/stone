@@ -81,6 +81,7 @@ public sealed record Report(
     IReadOnlyList<Difference> Differences,  // sorted: Unexpected, Intended, Accepted; then trigger, test, seq
     IReadOnlyList<LatencyFlag> Latency,     // informational, never affects exit code by default
     IReadOnlyList<NoiseRule> Noise,
+    IReadOnlyList<MatchKey> Moved,          // identical observations re-paired across tests (lazy fixtures)
     IReadOnlyList<RunError> Errors);        // build/test failures; non-empty => exit 2
 ```
 
@@ -91,6 +92,8 @@ Core entry point: `BehaveDiffRunner.RunAsync(RunOptions, IProgress<RunEvent>?, C
 Within each run, observations are grouped by `(test, kind, trigger, entity)`. They're paired by **occurrence index** within that group, so the 2nd `POST /workflows` in a test pairs with the 2nd on the other side. `entity` is part of the key for db-writes, so one save that writes a `Project` and a `Taxonomy` doesn't cross-pair. Leftovers become `ObservationAdded` / `ObservationRemoved`.
 
 Setup observations use test `"(setup)"` and match like any other test.
+
+**Cross-test re-pairing.** Fixtures that initialize lazily do their one-time work inside whichever test runs first. WhatInBox's `WibApiFactory` seeds its `User` that way. If a branch changes which test runs first, that work moves between tests. So after normal matching, leftover `ObservationRemoved` / `ObservationAdded` pairs with the same `(kind, trigger, entity)` and identical normalized `data` are re-paired regardless of test, and count as unchanged. Re-paired items are listed in `report.moved[]` so the move is visible but doesn't fail the run.
 
 ## 3. Normalization (both runs, before diffing)
 
@@ -169,6 +172,7 @@ When `selfNoiseCheck: true`, the base tree is run twice. Every difference betwee
     }
   ],
   "latency": [],
+  "moved": [],
   "noise": [
     { "kind": "http-response", "trigger": "GET /sessions", "path": "$.body.sessions[*].dateCreated", "origin": "self-noise" }
   ],
