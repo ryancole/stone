@@ -29,6 +29,28 @@ The server checks the repo it was started in. To keep BehaveDiff's config out of
 claude mcp add behavediff -- behavediff mcp --config C:\path\outside\the\repo\behavediff.yml
 ```
 
+### Claude desktop app (Code tab)
+
+The Code tab reads the same MCP config as the CLI (`~/.claude.json`, `.mcp.json`). Its Connectors UI is for hosted
+services only, so a local server goes in a settings file. Without the CLI, quit the app and merge a top-level
+`mcpServers` entry into `%USERPROFILE%\.claude.json` (don't replace the file):
+
+```json
+"mcpServers": {
+  "behavediff": {
+    "type": "stdio",
+    "command": "C:\\Users\\<you>\\.dotnet\\tools\\behavediff.exe",
+    "args": ["mcp", "--repo", "C:\\path\\to\\app", "--config", "C:\\path\\outside\\the\\repo\\behavediff.yml"]
+  }
+}
+```
+
+- Use the full path to `behavediff.exe`: the app doesn't read PowerShell profiles, so `.dotnet\tools` may not be
+  on its PATH. Restart the app after changing PATH or this file.
+- A user-level entry applies to every project, so pin `--repo` (and `--config`) to the app it should check.
+- Same with the CLI: `claude mcp add -s user behavediff -- <path>\behavediff.exe mcp --repo <app> --config <yml>`.
+- Check it connected: ask the session which MCP servers are available.
+
 Without `behavediff init` (which gitignores `.behavediff/`), run artifacts and accepted differences are stored under the temp directory instead of the repo, so the working tree stays untouched.
 
 ## CLAUDE.md snippet
