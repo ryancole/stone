@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>behavediff</AssemblyName>
+    <RootNamespace>BehaveDiff.Cli</RootNamespace>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>behavediff</ToolCommandName>
+    <PackageId>BehaveDiff</PackageId>
+    <Description>Behavioral diffing for .NET: what did my changes do to the app's runtime behavior?</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" Version="2.0.12" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\BehaveDiff.Core\BehaveDiff.Core.csproj" />
+    <!-- Ships BehaveDiff.Capture.dll next to the tool; it's injected into test hosts via DOTNET_STARTUP_HOOKS. -->
+    <ProjectReference Include="..\BehaveDiff.Capture\BehaveDiff.Capture.csproj" />
+  </ItemGroup>
+
+</Project>

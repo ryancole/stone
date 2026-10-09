@@ -23,7 +23,7 @@ sealed class EfCapture(ObservationWriter writer, HttpCapture http) : IObserver<K
 
     public static bool IsEnabled(string name) => name.StartsWith(Prefix, StringComparison.Ordinal);
 
-    sealed record PendingWrite(object Entry, string Entity, string State, JsonObject Values, JsonObject ProviderValues, string[] KeyNames);
+    sealed record PendingWrite(object Entry, string Entity, string State, JsonObject Values, JsonObject ProviderValues, string[] KeyNames, JsonObject ForeignKeys);
 
     sealed class PendingSave
     {
@@ -88,9 +88,10 @@ sealed class EfCapture(ObservationWriter writer, HttpCapture http) : IObserver<K
         var elapsed = Stopwatch.GetElapsedTime(save.StartTicks).TotalMilliseconds;
         foreach (var write in save.Writes)
         {
-            // Store-generated keys (identity, sequences) are temporary until the save completes.
+            // Store-generated keys (identity, sequences), and FKs pointing at rows inserted in the
+            // same save, hold temporary values until the save completes.
             if (outcome == "saved" && write.State == "Added")
-                foreach (var key in write.KeyNames)
+                foreach (var key in write.KeyNames.Concat(write.ForeignKeys.Select(fk => fk.Key)).Distinct())
                     write.Values[key] = ToJson(Reflect.Get(Reflect.Call(write.Entry, "Property", key), "CurrentValue"));
 
             var data = new JsonObject
@@ -100,6 +101,8 @@ sealed class EfCapture(ObservationWriter writer, HttpCapture http) : IObserver<K
                 ["state"] = write.State,
                 ["keys"] = new JsonArray(write.KeyNames.Select(k => (JsonNode?)k).ToArray()),
                 ["values"] = write.Values,
+                // Single-column FKs: column -> principal entity, so ids can be compared by insert order.
+                ["foreignKeys"] = write.ForeignKeys.Count > 0 ? write.ForeignKeys : null,
                 // Only columns whose stored form differs from the CLR value (value converters).
                 ["providerValues"] = write.ProviderValues.Count > 0 ? write.ProviderValues : null,
                 ["outcome"] = outcome == "saved" ? null : outcome,
@@ -151,7 +154,25 @@ sealed class EfCapture(ObservationWriter writer, HttpCapture http) : IObserver<K
                     providerValues[column] = provider;
             }
         }
-        return new PendingWrite(entry, entity, state, values, providerValues, keyNames);
+        return new PendingWrite(entry, entity, state, values, providerValues, keyNames, ForeignKeysOf(metadata));
+    }
+
+    static JsonObject ForeignKeysOf(object? entityType)
+    {
+        var result = new JsonObject();
+        try
+        {
+            foreach (var fk in Reflect.Enumerate(Reflect.Call(entityType, "GetForeignKeys")))
+            {
+                var props = Reflect.Enumerate(Reflect.Get(fk, "Properties")).ToList();
+                if (props.Count != 1) continue;
+                var principal = Reflect.Get(Reflect.Get(fk, "PrincipalEntityType"), "ClrType") as Type;
+                if (principal is not null)
+                    result[(string)Reflect.Get(props[0], "Name")!] = principal.Name;
+            }
+        }
+        catch { }
+        return result;
     }
 
     /// <summary>The value converter EF applies for this column, explicit or by convention; null when none.</summary>

@@ -57,7 +57,8 @@ public class WidgetEndpointTests
         // A write from test code, outside any request: exercises the "(test code)" trigger.
         await using (var db = await SampleApiFactory.CreateDbContextAsync())
         {
-            db.Widgets.Add(new Widget { Name = UniqueName("seeded"), CreatedUtc = DateTime.UtcNow, ExternalId = Guid.NewGuid() });
+            // Category and Widget in one save: the FK holds a temporary value until SaveChanges completes.
+            db.Widgets.Add(new Widget { Name = UniqueName("seeded"), CreatedUtc = DateTime.UtcNow, ExternalId = Guid.NewGuid(), Category = new Category { Name = UniqueName("cat") } });
             await db.SaveChangesAsync();
         }
         var list = JArray.Parse(await Client.GetStringAsync("/widgets"));

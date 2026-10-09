@@ -9,7 +9,8 @@ Behavioral diffing for .NET: run the same test suite against the base ref and th
 ## Current phase
 
 **Phase 0 done** ([docs/phase0-report.md](docs/phase0-report.md)).
-**Phase 1: proposal written, awaiting the user's OK** ([docs/phase1-proposal.md](docs/phase1-proposal.md)). No Phase 1 code until approved.
+**Phase 1 implemented** (proposal approved: [docs/phase1-proposal.md](docs/phase1-proposal.md); §9 lists implementation notes). Stand-in acceptance: `etc/acceptance.ps1` (5/5). Reference-app acceptance runs on the other machine via `etc/try-on-repo.ps1` (commands in `CLAUDE.local.md`).
+**Phase 2 next:** MCP server + agent CLAUDE.md snippet.
 
 ## Hard rules
 
@@ -26,6 +27,8 @@ The reference app only runs on the user's other dev machine. Verify here against
 
 - `etc/spike.ps1 -TestProject src/Samples/SampleApi.Tests/SampleApi.Tests.csproj`: local stand-in
 - `etc/spike.ps1 -RepoPath <repo> -TestProject <test csproj>`: any real app, e.g. the reference app on the other machine; clones to temp, never touches the original
+- `etc/acceptance.ps1`: the five Phase 1 acceptance scenarios against a throwaway repo made from the stand-in
+- `etc/try-on-repo.ps1 -RepoPath <repo> -TestProject <csproj> [-Edit "path::find::replace"] [-Expect ...]`: `behavediff run` on a disposable clone of any repo, optionally after edits
 
 ## Repo layout
 

@@ -202,3 +202,13 @@ Nothing in Core or Capture names an app, a route, an entity or a field. Per-app 
 ## 8. Out of scope for this proposal
 
 CLI flags beyond the spec, MCP tool shapes (Phase 2), caching, affected-test selection.
+
+## 9. Implementation notes (where the build differs from or extends the above)
+
+- **GUIDs normalize to a plain `<guid>`**, not `<guid:k>`. Numbering by first appearance shifts when a branch adds one GUID early, which is the same problem as identity values.
+- **`test-result` observations:** each test's outcome becomes an observation (`trigger: "(test)"`, `data: { outcome }`), so a test that starts failing is an ordinary difference, not a tool error. A run only errors (exit 2) when no TRX is produced.
+- **Matching within a group** uses sequence alignment (LCS on "no differences"). Equal observations anchor, and the gaps between anchors pair in order. One extra observation is reported once instead of shifting every later pair.
+- **Run artifacts** go to `<repo>/.behavediff/runs/<stamp>/` only when git ignores `.behavediff/`; otherwise to `%TEMP%/behavediff/runs/<repo>/<stamp>/`, so the working tree stays clean. Each run dir holds `report.json`, build logs, and per-run `capture/` + `trx/`.
+- **`copyUntracked`** (default `["**/appsettings*.json"]`) lists the untracked/ignored files copied from the working tree into the base worktree.
+- **Latency** needs both more than `latencyRegressionPct` and at least +20 ms, to keep millisecond jitter out.
+- `report.json` also carries `exitCode`.

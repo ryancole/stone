@@ -1,6 +1,9 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/BehaveDiff.Capture/BehaveDiff.Capture.csproj" />
+    <Project Path="src/BehaveDiff.Cli/BehaveDiff.Cli.csproj" />
+    <Project Path="src/BehaveDiff.Core.Tests/BehaveDiff.Core.Tests.csproj" />
+    <Project Path="src/BehaveDiff.Core/BehaveDiff.Core.csproj" />
   </Folder>
   <Folder Name="/src/Samples/">
     <Project Path="src/Samples/SampleApi.Tests/SampleApi.Tests.csproj" />
