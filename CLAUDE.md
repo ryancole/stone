@@ -4,9 +4,8 @@ Behavioral diffing for .NET: run the same test suite against the base ref and th
 
 ## Current phase
 
-**Phase 0 — capture spike.** Prove `DOTNET_STARTUP_HOOKS` injection works under MSTest/Microsoft.Testing.Platform against WhatInBox, then stop and report (mechanism, test attribution, JSONL sample, surprises). Do not build Phase 1 until reported.
-
-Before Phase 1 code: propose the Core public types (`Observation`, `Difference`, `Report`) and the `--json` report schema, and wait for an OK.
+**Phase 0 done** ([docs/phase0-report.md](docs/phase0-report.md)); capture fixes since then need one re-run of `etc/spike.ps1` on the WhatInBox machine.
+**Phase 1: proposal written, awaiting the user's OK** ([docs/phase1-proposal.md](docs/phase1-proposal.md)). No Phase 1 code until approved.
 
 ## Hard rules
 
