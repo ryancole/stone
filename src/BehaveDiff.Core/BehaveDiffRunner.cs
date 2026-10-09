@@ -88,6 +88,10 @@ public static class BehaveDiffRunner
                 Emit("setup", $"Copied untracked {file} into base tree");
             }
 
+            // Known before anything runs, so an early failure still reports what was compared.
+            baseInfo = new TreeInfo(baseRef, baseCommit, 0, 0);
+            currentInfo = new TreeInfo("working tree", dirty ? headCommit + "-dirty" : headCommit, 0, 0);
+
             var baseTree = new PreparedTree("base", worktree, baseRef, baseCommit);
             var currentTree = new PreparedTree("current", repo.Root, "working tree", dirty ? headCommit + "-dirty" : headCommit);
 

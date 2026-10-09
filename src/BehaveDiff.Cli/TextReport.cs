@@ -72,16 +72,23 @@ static class TextReport
         foreach (var byTrigger in diffs.GroupBy(d => (d.ObservationKind, d.Trigger)))
         {
             w.WriteLine($"  {byTrigger.Key.Trigger}  ({byTrigger.Key.ObservationKind})");
-            foreach (var d in byTrigger)
+            // One cause often shows up as the same change in many array elements and tests; print it once.
+            foreach (var same in byTrigger.GroupBy(d => (d.Kind, d.Entity, Path: d.Path is null ? null : Generalize(d.Path))))
             {
-                var where = d.Path ?? (d.Kind == DifferenceKind.ObservationAdded ? "new observation" : "observation no longer produced");
+                var d = same.First();
+                var n = same.Count();
+                var where = same.Key.Path ?? (d.Kind == DifferenceKind.ObservationAdded ? "new observation" : "observation no longer produced");
                 var entity = d.Entity is { } e ? $"{e} " : "";
-                w.WriteLine($"    [{d.Id}] {d.Kind} {entity}{where}");
+                var ids = n == 1 ? d.Id : $"{d.Id} +{n - 1}";
+                var tests = same.Select(x => x.Test).Distinct().ToList();
+                w.WriteLine($"    [{ids}] {d.Kind} {entity}{where}{(n > 1 ? $"  ({n}x in {tests.Count} test{(tests.Count == 1 ? "" : "s")})" : "")}");
+                var example = n > 1 ? "e.g. " : "";
                 if (d.Kind is DifferenceKind.ObservationAdded or DifferenceKind.ObservationRemoved)
-                    w.WriteLine($"        {Format(d.Before ?? d.After)}");
+                    w.WriteLine($"        {example}{Format(d.Before ?? d.After)}");
                 else
-                    w.WriteLine($"        {Format(d.Before)}  ->  {Format(d.After)}");
-                w.WriteLine($"        test: {d.Test}{(d.Reason.Rule is { } rule ? $"   (expect {rule})" : "")}{(d.Reason.Note is { } note ? $"   (accepted: {note})" : "")}");
+                    w.WriteLine($"        {example}{Format(d.Before)}  ->  {Format(d.After)}");
+                var shown = string.Join(", ", tests.Take(3)) + (tests.Count > 3 ? $" (+{tests.Count - 3} more)" : "");
+                w.WriteLine($"        test{(tests.Count == 1 ? "" : "s")}: {shown}{(d.Reason.Rule is { } rule ? $"   (expect {rule})" : "")}{(d.Reason.Note is { } note ? $"   (accepted: {note})" : "")}");
             }
         }
     }
@@ -101,8 +108,10 @@ static class TextReport
         });
     }
 
+    static string Generalize(string path) => System.Text.RegularExpressions.Regex.Replace(path, @"\[\d+]", "[*]");
+
     static string Describe(TreeInfo? t) =>
-        t is null ? "?" : $"{t.Ref} ({t.Commit}, {t.Passed}/{t.Tests} tests passed)";
+        t is null ? "?" : t.Tests == 0 ? $"{t.Ref} ({t.Commit})" : $"{t.Ref} ({t.Commit}, {t.Passed}/{t.Tests} tests passed)";
 
     static string Format(JsonNode? node)
     {

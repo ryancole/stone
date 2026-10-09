@@ -9,7 +9,7 @@ Behavioral diffing for .NET: run the same test suite against the base ref and th
 ## Current phase
 
 **Phase 0 done** ([docs/phase0-report.md](docs/phase0-report.md)).
-**Phase 1 implemented** (proposal approved: [docs/phase1-proposal.md](docs/phase1-proposal.md); §9 lists implementation notes). Stand-in acceptance: `etc/acceptance.ps1` (5/5). Reference-app acceptance runs on the other machine via `etc/try-on-repo.ps1` (commands in `CLAUDE.local.md`).
+**Phase 1 done** (proposal approved: [docs/phase1-proposal.md](docs/phase1-proposal.md); §9 lists implementation notes). Stand-in acceptance: `etc/acceptance.ps1` (5/5). Reference app (via `etc/try-on-repo.ps1`, commands in `CLAUDE.local.md`): clean, serialization regression and build break all behaved as specified. A DB-only scenario doesn't exist there (its API echoes entities); the stand-in covers it.
 **Phase 2 next:** MCP server + agent CLAUDE.md snippet.
 
 ## Hard rules

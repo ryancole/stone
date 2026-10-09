@@ -24,7 +24,9 @@ var run = new Command("run", "Compare runtime behavior of the working tree again
 run.SetAction(async (parse, ct) =>
 {
     var json = parse.GetValue(jsonOption);
-    var progress = new Progress<RunEvent>(e => Console.Error.WriteLine($"[{e.Stage}] {e.Message}"));
+    // Progress on stdout, except with --json where stdout carries only the report.
+    var progressOut = json ? Console.Error : Console.Out;
+    var progress = new Progress<RunEvent>(e => progressOut.WriteLine($"[{e.Stage}] {e.Message}"));
     var report = await BehaveDiffRunner.RunAsync(new RunOptions
     {
         RepoDirectory = Path.GetFullPath(parse.GetValue(repoOption) ?? Environment.CurrentDirectory),
