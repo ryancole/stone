@@ -14,16 +14,16 @@ namespace BehaveDiff.Core;
 /// per-kind hints (see IdentityHints).
 public sealed record Observation(
     long Seq,                 // emission order within the run
-    string Test,              // "SessionEndpointRegressionTests.GetSessions_NoAuthHeader_Returns401", or "(setup)"
+    string Test,              // "WidgetEndpointTests.CreateWidget_ReturnsCreated", or "(setup)"
     string Kind,
-    string Trigger,           // "POST /workflows", "(test code)"
+    string Trigger,           // "POST /widgets", "(test code)"
     JsonNode Data,
     double? DurationMs,
     DateTimeOffset Timestamp);
 
 public sealed record Recording(
     string Tree,              // "base" | "current"
-    string Ref,               // "master" / "working tree"
+    string Ref,               // base ref (default: origin/HEAD, e.g. "master") / "working tree"
     string Commit,            // HEAD of that tree (+ "-dirty" for current with changes)
     IReadOnlyList<TestResult> Tests,          // from TRX: name, outcome, start, end
     IReadOnlyList<Observation> Observations);
@@ -54,7 +54,7 @@ public sealed record Difference(
     string ObservationKind,   // "http-response" | "db-write" | ...
     string Trigger,
     string? Entity,           // db-write only (data.entity); null otherwise
-    string? Path,             // JSON path inside data, e.g. "$.body.workflow.enabledModules"; null for Observation*
+    string? Path,             // JSON path inside data, e.g. "$.body.tags"; null for Observation*
     JsonNode? Before,
     JsonNode? After,
     MatchKey Match);          // what was paired; lets explain_difference fetch both observations
@@ -62,7 +62,7 @@ public sealed record Difference(
 /// Why something landed where it did. A future LLM classifier adds Source = "llm"
 /// with a rationale; no schema change.
 public sealed record ClassificationReason(string Source, string? Rule, string? Note);
-// Source: "default" | "expect" (Rule = "POST /workflows" / "entity:Workflow") | "accepted" (Note = reason) | later "llm"
+// Source: "default" | "expect" (Rule = "POST /widgets" / "entity:Widget") | "accepted" (Note = reason) | later "llm"
 
 public sealed record MatchKey(string Test, string Kind, string Trigger, string? Entity, int Occurrence);
 
@@ -89,11 +89,11 @@ Core entry point: `BehaveDiffRunner.RunAsync(RunOptions, IProgress<RunEvent>?, C
 
 ## 2. Matching
 
-Within each run, observations are grouped by `(test, kind, trigger, entity)`. They're paired by **occurrence index** within that group, so the 2nd `POST /workflows` in a test pairs with the 2nd on the other side. `entity` is part of the key for db-writes, so one save that writes a `Project` and a `Taxonomy` doesn't cross-pair. Leftovers become `ObservationAdded` / `ObservationRemoved`.
+Within each run, observations are grouped by `(test, kind, trigger, entity)`. They're paired by **occurrence index** within that group, so the 2nd `POST /widgets` in a test pairs with the 2nd on the other side. `entity` is part of the key for db-writes, so one save that writes a `Widget` and a `Category` doesn't cross-pair. Leftovers become `ObservationAdded` / `ObservationRemoved`.
 
 Setup observations use test `"(setup)"` and match like any other test.
 
-**Cross-test re-pairing.** Fixtures that initialize lazily do their one-time work inside whichever test runs first. WhatInBox's `WibApiFactory` seeds its `User` that way. If a branch changes which test runs first, that work moves between tests. So after normal matching, leftover `ObservationRemoved` / `ObservationAdded` pairs with the same `(kind, trigger, entity)` and identical normalized `data` are re-paired regardless of test, and count as unchanged. Re-paired items are listed in `report.moved[]` so the move is visible but doesn't fail the run.
+**Cross-test re-pairing.** Fixtures that initialize lazily do their one-time work inside whichever test runs first. The reference app seeds a user that way. If a branch changes which test runs first, that work moves between tests. So after normal matching, leftover `ObservationRemoved` / `ObservationAdded` pairs with the same `(kind, trigger, entity)` and identical normalized `data` are re-paired regardless of test, and count as unchanged. Re-paired items are listed in `report.moved[]` so the move is visible but doesn't fail the run.
 
 ## 3. Normalization (both runs, before diffing)
 
@@ -101,17 +101,17 @@ Applied to `data` generically, with no per-kind code except the identity hints:
 
 | Normalizer | Matches | Becomes |
 |---|---|---|
-| GUID | D and N formats, standalone or embedded (`wf-x-<32hex>`) | `<guid:k>`, numbered by first appearance in the run, so a GUID that recurs across observations stays linked |
+| GUID | D and N formats, standalone or embedded (`wd-x-<32hex>`) | `<guid:k>`, numbered by first appearance in the run, so a GUID that recurs across observations stays linked |
 | Timestamp | ISO-8601 with 0–7 fractional digits, optional `Z`/offset; includes `0001-01-01T00:00:00` | `<timestamp>` |
 | W3C trace id | `00-<32hex>-<16hex>-<2hex>` | `<traceid>` |
 | Headers | config `ignore.headers`; default adds `Content-Length` when a body was captured | removed |
 | JSON paths | config `ignore.jsonPaths` + self-noise rules | removed |
 | DB columns | config `ignore.dbColumns` (`Entity.Column` or `Column`) | removed |
 
-**Identity values (the order-dependence problem from Phase 0).** Instead of rewriting ints, the diff treats two integers as equal when they're the same *identity ordinal* in their runs. Each run builds a map `(entity, keyValue) -> ordinal` from its `Added` db-writes, in seq order. Then `Workflow#3` in base and `Workflow#3` in current compare equal even if the raw ids are 7 and 8. This applies to:
-- db-write key columns, and FK columns. This needs one small capture addition: `data.foreignKeys: {"TaxonomyId": "Taxonomy"}`, read from EF metadata.
+**Identity values (the order-dependence problem from Phase 0).** Instead of rewriting ints, the diff treats two integers as equal when they're the same *identity ordinal* in their runs. Each run builds a map `(entity, keyValue) -> ordinal` from its `Added` db-writes, in seq order. Then `Widget#3` in base and `Widget#3` in current compare equal even if the raw ids are 7 and 8. This applies to:
+- db-write key columns, and FK columns. This needs one small capture addition: `data.foreignKeys: {"CategoryId": "Category"}`, read from EF metadata.
 - JSON fields in other kinds whose name matches `^id$|Id$`. Configurable via `identity.fieldPattern`.
-- route-parameter segments of `request.path` (`/workflows/5` with route `/workflows/{id}`).
+- route-parameter segments of `request.path` (`/widgets/5` with route `/widgets/{id}`).
 
 For response fields, which entity an `id` refers to isn't known, so it compares equal if *some* entity has the same ordinal for both values. A unit-tested escape hatch: `identity: { enabled: false }`.
 
@@ -121,7 +121,7 @@ When `selfNoiseCheck: true`, the base tree is run twice. Every difference betwee
 
 ## 5. Intent sorting (v1, deterministic)
 
-`--expect "POST /workflows"` matches a difference whose `trigger` matches. `--expect "entity:Workflow"` matches a db-write difference whose `entity` matches. Either sets `Classification = Intended` with `Reason { Source: "expect", Rule: <the expect> }`. Accepted items (from `.behavediff/accepted.json`, keyed by difference `Id`) become `Accepted`. Everything else is `Unexpected`. `--intent` text is stored in `report.intent.text`.
+`--expect "POST /widgets"` matches a difference whose `trigger` matches. `--expect "entity:Widget"` matches a db-write difference whose `entity` matches. Either sets `Classification = Intended` with `Reason { Source: "expect", Rule: <the expect> }`. Accepted items (from `.behavediff/accepted.json`, keyed by difference `Id`) become `Accepted`. Everything else is `Unexpected`. `--intent` text is stored in `report.intent.text`.
 
 ## 6. Report JSON (schemaVersion 1)
 
@@ -129,13 +129,13 @@ When `selfNoiseCheck: true`, the base tree is run twice. Every difference betwee
 {
   "schemaVersion": 1,
   "run": {
-    "base":    { "ref": "master", "commit": "8525094", "tests": 21, "passed": 21 },
-    "current": { "ref": "working tree", "commit": "8525094-dirty", "tests": 21, "passed": 21 },
-    "inputs": [{ "kind": "mstest", "project": "src/Tests/WhatInBox.Tests.Regression/WhatInBox.Tests.Regression.csproj" }],
+    "base":    { "ref": "master", "commit": "1a2b3c4", "tests": 6, "passed": 6 },
+    "current": { "ref": "working tree", "commit": "1a2b3c4-dirty", "tests": 6, "passed": 6 },
+    "inputs": [{ "kind": "mstest", "project": "src/Samples/SampleApi.Tests/SampleApi.Tests.csproj" }],
     "startedAt": "2026-10-09T08:00:00Z",
     "durationMs": 184000
   },
-  "intent": { "text": "Default new workflows to archived", "expect": ["entity:Workflow"] },
+  "intent": { "text": "Default new widgets to archived", "expect": ["entity:Widget"] },
   "summary": {
     "unexpected": 1, "intended": 2, "accepted": 0,
     "observationsCompared": 38, "unchanged": 35,
@@ -147,34 +147,34 @@ When `selfNoiseCheck: true`, the base tree is run twice. Every difference betwee
       "kind": "ValueChanged",
       "classification": "Unexpected",
       "reason": { "source": "default", "rule": null, "note": null },
-      "test": "WorkflowEndpointRegressionTests.GetWorkflow_EnabledModulesSerializesAsJsonArrayOfNames",
+      "test": "WidgetEndpointTests.GetWidget_TagsSerializeAsJsonArray",
       "observationKind": "http-response",
-      "trigger": "GET /workflows/{id}",
+      "trigger": "GET /widgets/{id}",
       "entity": null,
-      "path": "$.body.workflow.enabledModules",
-      "before": ["Index", "Verification"],
-      "after": "Index,Verification",
-      "match": { "test": "...", "kind": "http-response", "trigger": "GET /workflows/{id}", "entity": null, "occurrence": 0 }
+      "path": "$.body.tags",
+      "before": ["red", "blue"],
+      "after": "red,blue",
+      "match": { "test": "...", "kind": "http-response", "trigger": "GET /widgets/{id}", "entity": null, "occurrence": 0 }
     },
     {
       "id": "d-81be0d47",
       "kind": "ValueChanged",
       "classification": "Intended",
-      "reason": { "source": "expect", "rule": "entity:Workflow", "note": null },
-      "test": "WorkflowEndpointRegressionTests.CreateWorkflow_RoundTripsThroughDatabase",
+      "reason": { "source": "expect", "rule": "entity:Widget", "note": null },
+      "test": "WidgetEndpointTests.CreateWidget_ReturnsCreated",
       "observationKind": "db-write",
-      "trigger": "POST /workflows",
-      "entity": "Workflow",
+      "trigger": "POST /widgets",
+      "entity": "Widget",
       "path": "$.values.IsArchived",
       "before": false,
       "after": true,
-      "match": { "test": "...", "kind": "db-write", "trigger": "POST /workflows", "entity": "Workflow", "occurrence": 0 }
+      "match": { "test": "...", "kind": "db-write", "trigger": "POST /widgets", "entity": "Widget", "occurrence": 0 }
     }
   ],
   "latency": [],
   "moved": [],
   "noise": [
-    { "kind": "http-response", "trigger": "GET /sessions", "path": "$.body.sessions[*].dateCreated", "origin": "self-noise" }
+    { "kind": "http-response", "trigger": "GET /widgets", "path": "$[*].lastSeenUtc", "origin": "self-noise" }
   ],
   "errors": []
 }
@@ -189,6 +189,16 @@ Rules:
 
    **Open question:** should `Intended` alone exit 1? The spec says 1 means "differences found", so I've counted it. An agent would treat 1 + zero unexpected as "done, as intended".
 
-## 7. Out of scope for this proposal
+## 7. Works on any app of the supported shape
+
+Nothing in Core or Capture names an app, a route, an entity or a field. Per-app facts come only from `.behavediff.yml` / `--config`. Specifically:
+
+- **Base ref:** `baseRef` if set, else the remote's default branch (`git symbolic-ref refs/remotes/origin/HEAD`), else `main`, else `master`. If none resolves, fail with exit 2 and ask for `baseRef`.
+- **Sequential tests are checked, not assumed.** If any two TRX windows overlap, the tests ran in parallel and attribution can't be trusted. Exit 2 with `errors[]: { stage: "attribution", message: "tests ran in parallel; disable parallelization for this run" }`. Forcing serial execution from outside (e.g. an MTP/MSTest run setting) is a follow-up to investigate.
+- **Apps without EF Core** produce only `http-response` observations. Nothing else changes.
+- **Identity hints** (`identity.fieldPattern`, default `^id$|Id$`) and every ignore list are config with generic defaults. No list of known noisy fields ships for any particular app.
+- **Validation:** Core's unit tests and the acceptance tests run against the stand-in in `src/Samples` on every change. Real apps are validated through `etc/` scripts run on their machines, with results summarized without app specifics.
+
+## 8. Out of scope for this proposal
 
 CLI flags beyond the spec, MCP tool shapes (Phase 2), caching, affected-test selection.

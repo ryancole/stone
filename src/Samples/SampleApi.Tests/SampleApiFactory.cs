@@ -7,7 +7,7 @@ using SampleApi.Data;
 
 namespace SampleApi.Tests;
 
-/// <summary>One app and one fresh SQLite database per test run (WhatInBox uses Testcontainers SQL Server).</summary>
+/// <summary>One app and one fresh SQLite database per test run (the target app uses Testcontainers SQL Server).</summary>
 [TestClass]
 public static class SampleApiFactory
 {
@@ -21,14 +21,14 @@ public static class SampleApiFactory
         Instance = new WebApplicationFactory<Startup>().WithWebHostBuilder(web =>
             web.ConfigureAppConfiguration(c => c.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["ConnectionStrings:Workspace"] = $"Data Source={DbPath}",
+                ["ConnectionStrings:Catalog"] = $"Data Source={DbPath}",
             })));
 
         await using var db = await CreateDbContextAsync();
         await db.Database.EnsureCreatedAsync();
 
-        // Fixture-time write, like WhatInBox seeding its test user: must be labeled setup, not the first test.
-        db.Workflows.Add(new Workflow { Name = "fixture-seed", CreatedUtc = DateTime.UtcNow, ExternalId = Guid.NewGuid(), Priority = WorkflowPriority.High, Labels = ["seed", "vip"] });
+        // Fixture-time write, like a target app seeding its test user: must be labeled setup, not the first test.
+        db.Widgets.Add(new Widget { Name = "fixture-seed", CreatedUtc = DateTime.UtcNow, ExternalId = Guid.NewGuid(), Priority = WidgetPriority.High, Aliases = ["seed", "vip"] });
         await db.SaveChangesAsync();
     }
 
@@ -40,6 +40,6 @@ public static class SampleApiFactory
         File.Delete(DbPath);
     }
 
-    public static Task<WorkspaceContext> CreateDbContextAsync() =>
-        Instance.Services.GetRequiredService<IDbContextFactory<WorkspaceContext>>().CreateDbContextAsync();
+    public static Task<CatalogContext> CreateDbContextAsync() =>
+        Instance.Services.GetRequiredService<IDbContextFactory<CatalogContext>>().CreateDbContextAsync();
 }

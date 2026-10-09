@@ -7,9 +7,9 @@ public class Startup(IConfiguration configuration)
 {
     public void ConfigureServices(IServiceCollection services)
     {
-        // Mirrors WhatInBox: a factory registration with a custom factory type, not AddDbContext.
-        services.AddDbContextFactory<WorkspaceContext, WorkspaceContextFactory>(options =>
-            options.UseSqlite(configuration.GetConnectionString("Workspace")));
+        // Mirrors the target app: a factory registration with a custom factory type, not AddDbContext.
+        services.AddDbContextFactory<CatalogContext, CatalogContextFactory>(options =>
+            options.UseSqlite(configuration.GetConnectionString("Catalog")));
 
         services.AddControllers().AddNewtonsoftJson();
     }

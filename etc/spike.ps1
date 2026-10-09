@@ -13,9 +13,9 @@
   That directory is gitignored: observations can contain real response data.
 
 .EXAMPLE
-  # On the WhatInBox machine (Docker running):
-  ./etc/spike.ps1 -RepoPath C:\Users\Ryan\source\repos\WhatInBox `
-                  -TestProject src/Tests/WhatInBox.Tests.Regression/WhatInBox.Tests.Regression.csproj
+  # Against a target app (Docker running if its tests need it):
+  ./etc/spike.ps1 -RepoPath C:\path\to\target `
+                  -TestProject src/Tests/Target.Tests/Target.Tests.csproj
 
 .EXAMPLE
   # Locally, against the stand-in (no clone needed, it lives in this repo):

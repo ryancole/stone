@@ -487,3 +487,6 @@ $RECYCLE.BIN/
 
 # Phase 0 spike output (real response data)
 .spike-out/
+
+# Local-only notes about the (private) target app
+CLAUDE.local.md

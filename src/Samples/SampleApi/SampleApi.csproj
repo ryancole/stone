@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
-  <!-- Local stand-in for WhatInBox: Startup class, Newtonsoft MVC, AddDbContextFactory with a custom factory. -->
+  <!-- Local stand-in for the target app: Startup class, Newtonsoft MVC, AddDbContextFactory with a custom factory. -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>

@@ -118,7 +118,7 @@ sealed class HttpCapture(ObservationWriter writer) : IObserver<KeyValuePair<stri
         writer.Write("http-response", trigger, data, elapsed, state.Attribution, state.StartedAt);
     }
 
-    /// <summary>"/workflows/{id}" from the matched RouteEndpoint, or null when no endpoint matched.</summary>
+    /// <summary>"/widgets/{id}" from the matched RouteEndpoint, or null when no endpoint matched.</summary>
     static string? RouteTemplate(object httpContext)
     {
         foreach (var kv in Reflect.Enumerate(Reflect.Get(httpContext, "Features")))
