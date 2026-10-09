@@ -127,10 +127,11 @@ public static class BehaveDiffRunner
                 noise.AddRange(SelfNoiseRules(matcher.Match(baseN, normalizer.Normalize(baseRec2))));
 
             var match = matcher.Match(baseN, currentN);
-            var accepted = AcceptedStore.Load(Path.Combine(repo.Root, ArtifactsDirName, AcceptedFileName)).ToDictionary(a => a.Id);
+            var accepted = AcceptedStore.Load(await BehaveDiffResults.AcceptedPathAsync(repo, ct)).ToDictionary(a => a.Id);
             var kept = match.Diffs.Where(d => !noise.Any(rule => Suppresses(rule, d))).ToList();
-            var differences = kept
-                .Select(d => Classifier.Classify(d, options.Expect, accepted))
+            var classified = kept.Select(d => (Item: d, Difference: Classifier.Classify(d, options.Expect, accepted))).ToList();
+            var differences = classified
+                .Select(c => c.Difference)
                 .OrderBy(d => d.Classification)
                 .ThenBy(d => d.Trigger, StringComparer.Ordinal)
                 .ThenBy(d => d.Test, StringComparer.Ordinal)
@@ -158,6 +159,14 @@ public static class BehaveDiffRunner
                 match.Moved,
                 []);
             await WriteReportAsync(report, artifacts);
+
+            // Raw (un-normalized) observations behind each difference, for explain_difference.
+            var baseBySeq = baseRec.Observations.ToDictionary(o => o.Seq);
+            var currentBySeq = currentRec.Observations.ToDictionary(o => o.Seq);
+            BehaveDiffResults.WriteDetails(artifacts, classified.Select(c => new DifferenceDetail(
+                c.Difference,
+                c.Item.Base is { } b ? baseBySeq.GetValueOrDefault(b.Seq) : null,
+                c.Item.Current is { } cur ? currentBySeq.GetValueOrDefault(cur.Seq) : null)));
             return report;
         }
         catch (BehaveDiffException ex)
@@ -216,8 +225,8 @@ public static class BehaveDiffRunner
     {
         var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
         var root = await repo.IsIgnoredAsync($"{ArtifactsDirName}/runs/x", ct)
-            ? Path.Combine(repo.Root, ArtifactsDirName, "runs")
-            : Path.Combine(Path.GetTempPath(), "behavediff", "runs", Path.GetFileName(repo.Root));
+            ? BehaveDiffResults.ArtifactRoots(repo.Root)[0]
+            : BehaveDiffResults.ArtifactRoots(repo.Root)[1];
         var dir = Path.Combine(root, stamp);
         Directory.CreateDirectory(dir);
         return dir;

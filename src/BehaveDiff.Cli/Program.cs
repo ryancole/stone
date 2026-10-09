@@ -55,5 +55,58 @@ var init = new Command("init", "Create .behavediff.yml and gitignore BehaveDiff'
 };
 init.SetAction(parse => InitCommand.Run(Path.GetFullPath(parse.GetValue(repoOption) ?? Environment.CurrentDirectory), Console.Out));
 
-var root = new RootCommand("BehaveDiff: what did my uncommitted changes do to the app's runtime behavior?") { run, init };
+var idArgument = new Argument<string>("id") { Description = "Difference id from the latest report, e.g. d-3f9a1c2e" };
+
+var explain = new Command("explain", "Show one difference from the latest run with the full observations on both sides")
+{
+    idArgument, repoOption,
+};
+explain.SetAction(async (parse, ct) =>
+{
+    var detail = await BehaveDiffResults.ExplainAsync(RepoDir(parse), parse.GetValue(idArgument)!, ct);
+    if (detail is null)
+    {
+        Console.Error.WriteLine($"Difference '{parse.GetValue(idArgument)}' is not in the latest report.");
+        return 2;
+    }
+    Console.Out.WriteLine(System.Text.Json.JsonSerializer.Serialize(detail, ReportJson.Options));
+    return 0;
+});
+
+var reasonOption = new Option<string>("--reason") { Description = "Why this difference is correct", Required = true };
+var accept = new Command("accept", "Accept a difference from the latest run as correct; later runs report it as Accepted")
+{
+    idArgument, reasonOption, repoOption,
+};
+accept.SetAction(async (parse, ct) =>
+{
+    try
+    {
+        var d = await BehaveDiffResults.AcceptAsync(RepoDir(parse), parse.GetValue(idArgument)!, parse.GetValue(reasonOption)!, ct);
+        Console.Out.WriteLine($"Accepted {d.Id}: {d.Kind} {d.Trigger} {d.Path}");
+        return 0;
+    }
+    catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or KeyNotFoundException)
+    {
+        Console.Error.WriteLine(ex.Message);
+        return 2;
+    }
+});
+
+var mcp = new Command("mcp", "Run the BehaveDiff MCP server on stdio (for Claude Code and other MCP clients)")
+{
+    repoOption, configOption,
+};
+mcp.SetAction(async (parse, ct) =>
+{
+    await BehaveDiff.Mcp.BehaveDiffMcpServer.RunAsync(new BehaveDiff.Mcp.BehaveDiffServerOptions(
+        RepoDir(parse),
+        Path.Combine(AppContext.BaseDirectory, "BehaveDiff.Capture.dll"),
+        parse.GetValue(configOption) is { } c ? Path.GetFullPath(c) : null), ct);
+    return 0;
+});
+
+string RepoDir(ParseResult parse) => Path.GetFullPath(parse.GetValue(repoOption) ?? Environment.CurrentDirectory);
+
+var root = new RootCommand("BehaveDiff: what did my uncommitted changes do to the app's runtime behavior?") { run, init, explain, accept, mcp };
 return await root.Parse(args).InvokeAsync();

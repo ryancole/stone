@@ -4,6 +4,7 @@
     <Project Path="src/BehaveDiff.Cli/BehaveDiff.Cli.csproj" />
     <Project Path="src/BehaveDiff.Core.Tests/BehaveDiff.Core.Tests.csproj" />
     <Project Path="src/BehaveDiff.Core/BehaveDiff.Core.csproj" />
+    <Project Path="src/BehaveDiff.Mcp/BehaveDiff.Mcp.csproj" />
   </Folder>
   <Folder Name="/src/Samples/">
     <Project Path="src/Samples/SampleApi.Tests/SampleApi.Tests.csproj" />

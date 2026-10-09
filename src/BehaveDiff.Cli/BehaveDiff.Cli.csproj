@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\BehaveDiff.Core\BehaveDiff.Core.csproj" />
+    <ProjectReference Include="..\BehaveDiff.Mcp\BehaveDiff.Mcp.csproj" />
     <!-- Ships BehaveDiff.Capture.dll next to the tool; it's injected into test hosts via DOTNET_STARTUP_HOOKS. -->
     <ProjectReference Include="..\BehaveDiff.Capture\BehaveDiff.Capture.csproj" />
   </ItemGroup>

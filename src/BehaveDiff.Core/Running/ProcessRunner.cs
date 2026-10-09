@@ -24,6 +24,8 @@ static class ProcessRunner
             WorkingDirectory = workingDirectory,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            // Never inherit our stdin: under `behavediff mcp` it is the protocol pipe.
+            RedirectStandardInput = true,
             UseShellExecute = false,
             CreateNoWindow = true,
             StandardOutputEncoding = Encoding.UTF8,
@@ -70,6 +72,7 @@ static class ProcessRunner
                 throw new InvalidOperationException($"Could not start {fileName}");
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
+            process.StandardInput.Close();
             try
             {
                 await process.WaitForExitAsync(ct);

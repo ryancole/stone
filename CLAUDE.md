@@ -10,7 +10,7 @@ Behavioral diffing for .NET: run the same test suite against the base ref and th
 
 **Phase 0 done** ([docs/phase0-report.md](docs/phase0-report.md)).
 **Phase 1 done** (proposal approved: [docs/phase1-proposal.md](docs/phase1-proposal.md); §9 lists implementation notes). Stand-in acceptance: `etc/acceptance.ps1` (5/5). Reference app (via `etc/try-on-repo.ps1`, commands in `CLAUDE.local.md`): clean, serialization regression and build break all behaved as specified. A DB-only scenario doesn't exist there (its API echoes entities); the stand-in covers it.
-**Phase 2 next:** MCP server + agent CLAUDE.md snippet.
+**Phase 2 done here:** `behavediff mcp` (src/BehaveDiff.Mcp; tools check_behavior_changes / explain_difference / accept_difference) and [docs/agent-instructions.md](docs/agent-instructions.md). `etc/mcp-smoke.ps1` drives it with a real MCP client (all pass). Next: the user tries it from Claude Code on the reference app.
 
 ## Hard rules
 
@@ -29,6 +29,7 @@ The reference app only runs on the user's other dev machine. Verify here against
 - `etc/spike.ps1 -RepoPath <repo> -TestProject <test csproj>`: any real app, e.g. the reference app on the other machine; clones to temp, never touches the original
 - `etc/acceptance.ps1`: the five Phase 1 acceptance scenarios against a throwaway repo made from the stand-in
 - `etc/try-on-repo.ps1 -RepoPath <repo> -TestProject <csproj> [-Edit "path::find::replace"] [-Expect ...]`: `behavediff run` on a disposable clone of any repo, optionally after edits
+- `etc/mcp-smoke.ps1`: `behavediff mcp` end to end with a real MCP client (etc/mcp-smoke.cs, a .NET 10 file-based app)
 
 ## Repo layout
 
@@ -36,10 +37,10 @@ The reference app only runs on the user's other dev machine. Verify here against
 - `etc/`: scripts (spike runners, acceptance-test drivers, etc.)
 - `docs/`: spec and docs
 
-Planned projects (Phase 1):
+Projects:
 
 - `src/BehaveDiff.Core`: orchestration, normalization, diff, report model
 - `src/BehaveDiff.Capture`: startup hook (from Phase 0)
 - `src/BehaveDiff.Cli`: System.CommandLine, packaged as a global tool
-- `src/BehaveDiff.Mcp`: stdio MCP server (Phase 2)
+- `src/BehaveDiff.Mcp`: stdio MCP server, started by `behavediff mcp`
 - `src/BehaveDiff.Core.Tests`: MSTest
