@@ -484,3 +484,6 @@ $RECYCLE.BIN/
 # BehaveDiff run artifacts (may contain real data / auth headers)
 .behavediff/
 .behavediff.local.yml
+
+# Phase 0 spike output (real response data)
+.spike-out/

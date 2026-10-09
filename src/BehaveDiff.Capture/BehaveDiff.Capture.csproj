@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Startup hook loaded via DOTNET_STARTUP_HOOKS into a process that knows nothing about us.
+    BCL-only on purpose: ASP.NET Core and EF Core are reached through reflection so the hook
+    binds to whatever versions the target app loads, and is inert in processes that have neither.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>BehaveDiff.Capture</RootNamespace>
+  </PropertyGroup>
+
+</Project>
